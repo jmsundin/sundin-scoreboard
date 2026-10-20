@@ -2,11 +2,16 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Scoreboard">
-<meta name="theme-color" content="#1f6feb">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#f6f5f1" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#151514" media="(prefers-color-scheme: dark)">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" href="/icons/icon-192.png">
 <title>Sundin Scoreboard</title>
 <style>
   :root {
@@ -21,7 +26,10 @@
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--text);
     font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-  main { max-width: 960px; margin: 0 auto; padding: 24px 16px 64px; }
+  /* On the home screen the page runs under the status bar and home indicator. */
+  main { max-width: 960px; margin: 0 auto;
+    padding: max(24px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right))
+      max(64px, calc(env(safe-area-inset-bottom) + 24px)) max(16px, env(safe-area-inset-left)); }
   h1 { font-size: 22px; margin: 0 0 4px; }
   h2 { font-size: 15px; margin: 0 0 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
   .sub { color: var(--muted); margin: 0 0 20px; }
@@ -54,6 +62,14 @@
   blockquote cite { display: block; font-size: 12px; color: var(--muted); font-style: normal; margin-top: 4px; }
   .muted { color: var(--muted); }
   .tools { display: flex; gap: 8px; flex-wrap: wrap; }
+  .toasts { position: fixed; left: 0; right: 0; bottom: max(16px, env(safe-area-inset-bottom));
+    display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 0 16px; pointer-events: none; z-index: 10; }
+  .toast { display: flex; align-items: center; gap: 12px; max-width: 480px; width: 100%;
+    background: var(--text); color: var(--bg); border-radius: 10px; padding: 10px 10px 10px 14px;
+    box-shadow: 0 6px 24px rgba(0,0,0,.25); pointer-events: auto; }
+  .toast span { flex: 1; }
+  .toast button { border: 0; background: var(--accent); color: #fff; font-weight: 600; white-space: nowrap; }
+  .toast button.link { background: none; color: inherit; opacity: .7; font-weight: 400; }
 </style>
 </head>
 <body>
@@ -132,8 +148,10 @@
       <button id="importBtn">Import JSON</button>
       <input type="file" id="importFile" accept="application/json" hidden>
     </div>
+    <p class="muted" style="margin:12px 0 0">Version <span id="appVersion"></span></p>
   </div>
 </main>
+<div class="toasts" id="toasts" aria-live="polite"></div>
 
 <script>
 const ACTIONS = [
@@ -315,6 +333,84 @@ document.getElementById("importFile").addEventListener("change", async e => {
 });
 
 render();
+
+// ---- App updates ----
+// Each deploy stamps its commit into this page and into sw.js. When a newer
+// service worker has downloaded, a toast offers "Restart now".
+const APP_COMMIT = "__APP_COMMIT__";
+const APP_VERSION = APP_COMMIT.startsWith("__") ? "dev" : APP_COMMIT.replace(/^build-/, "").slice(0, 7);
+const VERSION_KEY = "sundin-scoreboard-app-version";
+const UPDATE_CHECK_INTERVAL = 5 * 60 * 1000;
+document.getElementById("appVersion").textContent = APP_VERSION;
+
+function toast(message, action) {
+  const el = document.createElement("div");
+  el.className = "toast";
+  el.setAttribute("role", "status");
+  el.innerHTML = `<span>${esc(message)}</span>`;
+  if (action) {
+    const button = document.createElement("button");
+    button.textContent = action.label;
+    button.addEventListener("click", () => action.onClick(button));
+    el.append(button);
+  } else {
+    const close = document.createElement("button");
+    close.className = "link";
+    close.textContent = "✕";
+    close.title = "Dismiss";
+    close.addEventListener("click", () => el.remove());
+    el.append(close);
+    setTimeout(() => el.remove(), 6000);
+  }
+  document.getElementById("toasts").append(el);
+  return el;
+}
+
+// Once per version, so a later reload doesn't repeat it.
+(() => {
+  let previous = null;
+  try { previous = localStorage.getItem(VERSION_KEY); localStorage.setItem(VERSION_KEY, APP_COMMIT); } catch (e) {}
+  if (previous && previous !== APP_COMMIT) toast(`App updated · version ${APP_VERSION}`);
+})();
+
+function offerRestart(worker) {
+  if (document.getElementById("updateToast")) return;
+  const el = toast(`Update ready · currently loaded version ${APP_VERSION}`, {
+    label: "Restart now",
+    onClick(button) {
+      button.disabled = true;
+      button.textContent = "Restarting…";
+      navigator.serviceWorker.addEventListener("controllerchange", () => location.reload(), { once: true });
+      worker.postMessage({ type: "SKIP_WAITING" });
+    },
+  });
+  el.id = "updateToast";
+}
+
+if ("serviceWorker" in navigator && location.protocol !== "file:") {
+  window.addEventListener("load", async () => {
+    try {
+      const registration = await navigator.serviceWorker.register("/sw.js", { updateViaCache: "none" });
+      // Only an update to a running version is offered; the first install is silent.
+      const reportWaiting = () => { if (registration.waiting && registration.active) offerRestart(registration.waiting); };
+      registration.addEventListener("updatefound", () => {
+        const worker = registration.installing;
+        worker?.addEventListener("statechange", reportWaiting);
+      });
+      reportWaiting();
+      const check = () => {
+        if (document.visibilityState === "visible" && navigator.onLine) registration.update().catch(() => {});
+      };
+      // Reopening the app from the home screen counts as becoming visible.
+      document.addEventListener("visibilitychange", check);
+      window.addEventListener("online", check);
+      setInterval(check, UPDATE_CHECK_INTERVAL);
+      navigator.storage?.persist?.().catch(() => {});
+    } catch (err) {
+      console.warn("Offline support and updates are unavailable.", err);
+    }
+  });
+}
 </script>
 </body>
 </html>

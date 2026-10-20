@@ -1,10 +1,7 @@
 const { test, expect } = require("@playwright/test");
-const path = require("path");
-
-const PAGE = "file://" + path.resolve(__dirname, "..", "index.html");
 
 test.beforeEach(async ({ page }) => {
-  await page.goto(PAGE);
+  await page.goto("/");
 });
 
 test("logging a visit adds up points and keeps the quote", async ({ page }) => {

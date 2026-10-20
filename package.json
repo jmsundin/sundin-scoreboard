@@ -2,6 +2,8 @@
   "name": "sundin-scoreboard",
   "private": true,
   "scripts": {
+    "build": "node scripts/build.js dist",
+    "start": "node scripts/build.js dist && node scripts/serve.js dist 4173",
     "test": "playwright test"
   },
   "devDependencies": {

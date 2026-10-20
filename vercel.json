@@ -1,5 +1,16 @@
 {
-  "buildCommand": "",
+  "buildCommand": "node scripts/build.mjs",
   "installCommand": "",
-  "outputDirectory": "."
+  "outputDirectory": "dist",
+  "headers": [
+    {
+      "source": "/(.*)",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-cache"
+        }
+      ]
+    }
+  ]
 }

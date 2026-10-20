@@ -4,3 +4,5 @@ playwright-report/
 .vercel
 .DS_Store
 .env*
+dist/
+test-dist/

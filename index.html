@@ -2,11 +2,15 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="Scoreboard">
 <meta name="theme-color" content="#1f6feb">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
 <title>Sundin Scoreboard</title>
 <style>
   :root {
@@ -21,7 +25,8 @@
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--text);
     font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-  main { max-width: 960px; margin: 0 auto; padding: 24px 16px 64px; }
+  main { max-width: 960px; margin: 0 auto;
+    padding: calc(24px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right)) calc(96px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left)); }
   h1 { font-size: 22px; margin: 0 0 4px; }
   h2 { font-size: 15px; margin: 0 0 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
   .sub { color: var(--muted); margin: 0 0 20px; }
@@ -54,6 +59,13 @@
   blockquote cite { display: block; font-size: 12px; color: var(--muted); font-style: normal; margin-top: 4px; }
   .muted { color: var(--muted); }
   .tools { display: flex; gap: 8px; flex-wrap: wrap; }
+  .version { text-align: center; font-size: 12px; color: var(--muted); }
+  #updateBanner { position: fixed; left: 16px; right: 16px; bottom: calc(16px + env(safe-area-inset-bottom));
+    max-width: 480px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+    padding: 12px 14px; border-radius: 10px; background: var(--text); color: var(--bg);
+    box-shadow: 0 6px 24px rgba(0,0,0,.25); }
+  #updateBanner[hidden] { display: none; }
+  #updateBanner button { background: var(--accent); border-color: var(--accent); color: #fff; white-space: nowrap; }
 </style>
 </head>
 <body>
@@ -133,7 +145,13 @@
       <input type="file" id="importFile" accept="application/json" hidden>
     </div>
   </div>
+  <p class="version">Version __APP_VERSION__</p>
 </main>
+
+<div id="updateBanner" role="status" hidden>
+  <span>A new version is ready.</span>
+  <button id="restartBtn" type="button">Restart now</button>
+</div>
 
 <script>
 const ACTIONS = [
@@ -315,6 +333,41 @@ document.getElementById("importFile").addEventListener("change", async e => {
 });
 
 render();
+
+// Installed-app support: offline cache plus "Restart now" when a new deploy lands.
+if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
+  let restartRequested = false;
+  const banner = document.getElementById("updateBanner");
+  const showUpdate = worker => {
+    banner.hidden = false;
+    document.getElementById("restartBtn").onclick = () => {
+      restartRequested = true;
+      worker.postMessage("SKIP_WAITING");
+    };
+  };
+
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (restartRequested) location.reload();
+  });
+
+  navigator.serviceWorker.register("sw.js").then(reg => {
+    if (reg.waiting && navigator.serviceWorker.controller) showUpdate(reg.waiting);
+    reg.addEventListener("updatefound", () => {
+      const worker = reg.installing;
+      worker.addEventListener("statechange", () => {
+        if (worker.state === "installed" && navigator.serviceWorker.controller) showUpdate(worker);
+      });
+    });
+    // iPhone home-screen apps resume rather than relaunch, so check on every return too.
+    const check = () => reg.update().catch(() => {});
+    setInterval(check, 5 * 60 * 1000);
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") check();
+    });
+  }).catch(err => console.error("Service worker registration failed", err));
+
+  if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+}
 </script>
 </body>
 </html>

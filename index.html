@@ -17,10 +17,14 @@
     --bg: #f6f5f1; --panel: #ffffff; --text: #1d1d1b; --muted: #6b6a65;
     --line: #e2e0d8; --accent: #1f6feb; --good: #1a7f37; --warn: #b35900;
     --bar: #e9e7df;
+    --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100;
+    --seq1: #bcd6f5; --seq2: #7eb0ec; --seq3: #3d84dc; --seq4: #1c5aa6;
   }
   @media (prefers-color-scheme: dark) {
     :root { --bg: #151514; --panel: #1f1f1d; --text: #ecebe6; --muted: #9b9a94;
-      --line: #33322f; --accent: #4c8dff; --good: #3fb950; --warn: #e3a04f; --bar: #2b2a27; }
+      --line: #33322f; --accent: #4c8dff; --good: #3fb950; --warn: #e3a04f; --bar: #2b2a27;
+      --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500;
+      --seq1: #1d3a5f; --seq2: #245a99; --seq3: #2f7bd6; --seq4: #7fb2f0; }
   }
   * { box-sizing: border-box; }
   body { margin: 0; background: var(--bg); color: var(--text);
@@ -36,7 +40,8 @@
   .stat small { font-size: 14px; color: var(--muted); font-weight: 400; }
   .bar { height: 8px; background: var(--bar); border-radius: 4px; overflow: hidden; margin-top: 8px; }
   .bar > div { height: 100%; background: var(--accent); }
-  .unlocked { color: var(--good); font-weight: 600; }
+  .unlocked { color: var(--good); font-weight: 600; font-size: 26px; }
+  td:first-child { white-space: nowrap; }
   label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
   input[type=text], input[type=date], textarea {
     width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px;
@@ -65,6 +70,32 @@
     padding: 12px 14px; border-radius: 10px; background: var(--text); color: var(--bg);
     box-shadow: 0 6px 24px rgba(0,0,0,.25); }
   #updateBanner[hidden] { display: none; }
+  .tabs { display: flex; gap: 4px; margin: 0 0 16px; background: var(--bar); padding: 4px; border-radius: 10px;
+    position: sticky; top: env(safe-area-inset-top); z-index: 5; }
+  .tabs button { flex: 1; border: 0; background: none; padding: 8px 6px; border-radius: 7px; color: var(--muted); font-weight: 500; }
+  .tabs button[aria-selected="true"] { background: var(--panel); color: var(--text); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+  .tab[hidden] { display: none; }
+  .quest-row { margin-bottom: 10px; }
+  .quest-label { display: flex; justify-content: space-between; font-size: 14px; }
+  .quest-row.met .quest-label span:first-child { color: var(--good); font-weight: 600; }
+  .quest-row.met .bar > div { background: var(--good); }
+  .num { font-variant-numeric: tabular-nums; }
+  ul.items { list-style: none; margin: 0; padding: 0; }
+  ul.items li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+  ul.items li button { white-space: nowrap; font-size: 14px; padding: 6px 10px; }
+  select { padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--text); font: inherit; font-size: 16px; width: 100%; }
+  a { color: var(--accent); }
+  .chart { width: 100%; }
+  .chart svg { display: block; max-width: 100%; height: auto; }
+  .legend { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 13px; color: var(--muted); margin-bottom: 8px; }
+  .sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+  #weekDetail h3 { font-size: 14px; margin: 12px 0 6px; }
+  #weekDetail ul { margin: 0; padding: 0; list-style: none; font-size: 14px; }
+  #weekDetail li { padding: 4px 0; }
+  .chart-tip { position: absolute; pointer-events: none; z-index: 20; background: var(--panel); color: var(--text);
+    border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: 13px; line-height: 1.5;
+    box-shadow: 0 4px 16px rgba(0,0,0,.15); transition: opacity .1s; }
+  .chart-tip .muted { font-size: 12px; }
   #updateBanner button { background: var(--accent); border-color: var(--accent); color: #fff; white-space: nowrap; }
 </style>
 </head>
@@ -73,6 +104,19 @@
   <h1>Sundin Systems Scoreboard</h1>
   <p class="sub">Field research, not selling. You score for what you learn. A "no" still counts.</p>
 
+  <div class="panel" id="quest">
+    <h2>This week's quest</h2>
+    <div id="questRows"></div>
+    <p class="muted" id="questStreak" style="margin:4px 0 0"></p>
+  </div>
+
+  <nav class="tabs" role="tablist">
+    <button type="button" role="tab" data-tab="field" aria-selected="true">Field</button>
+    <button type="button" role="tab" data-tab="prep" aria-selected="false">Prep</button>
+    <button type="button" role="tab" data-tab="progress" aria-selected="false">Progress</button>
+  </nav>
+
+  <section class="tab" id="tab-field">
   <div class="grid">
     <div class="panel">
       <h2>Points</h2>
@@ -136,6 +180,76 @@
     <div id="quotes"></div>
   </div>
 
+  </section>
+
+  <section class="tab" id="tab-prep" hidden>
+    <div class="panel">
+      <h2>LeetCode due for review</h2>
+      <ul class="items" id="dueList"></ul>
+    </div>
+    <div class="panel">
+      <h2>Log a new LeetCode problem</h2>
+      <form id="lcForm">
+        <div class="row">
+          <div><label for="lcName">Problem</label><input type="text" id="lcName" placeholder="e.g. Two Sum" required></div>
+          <div><label for="lcUrl">Link (optional)</label><input type="text" id="lcUrl" inputmode="url" placeholder="https://leetcode.com/problems/..."></div>
+          <div><label for="lcDiff">Difficulty</label>
+            <select id="lcDiff"><option>Easy</option><option selected>Medium</option><option>Hard</option></select></div>
+        </div>
+        <button class="primary" type="submit">Add problem +3</button>
+        <p class="muted" style="margin:8px 0 0">It comes back for review after 3, 10 and 30 days.</p>
+      </form>
+    </div>
+    <div class="panel">
+      <h2>System design</h2>
+      <p class="muted" style="margin-top:0">Explain each one out loud or on paper for 30 minutes. Start with Margin Chat.</p>
+      <ul class="items" id="designList"></ul>
+    </div>
+    <div class="panel">
+      <h2>Behavioral stories</h2>
+      <p class="muted" style="margin-top:0">Say each one out loud in under two minutes: situation, what you did, result.</p>
+      <ul class="items" id="storyList"></ul>
+    </div>
+    <div class="panel">
+      <h2>Recent prep</h2>
+      <div class="table-wrap"><table id="prepTable"></table></div>
+    </div>
+  </section>
+
+  <section class="tab" id="tab-progress" hidden>
+    <div class="panel">
+      <h2>Points per week</h2>
+      <div class="legend">
+        <span><span class="sw" style="background:var(--s1)"></span>Field</span>
+        <span><span class="sw" style="background:var(--s2)"></span>LeetCode</span>
+        <span><span class="sw" style="background:var(--s3)"></span>System design</span>
+        <span><span class="sw" style="background:var(--s4)"></span>Behavioral</span>
+      </div>
+      <div class="chart" id="chartWeekly"></div>
+      <div id="weekDetail"></div>
+    </div>
+    <div class="panel">
+      <h2>Active days</h2>
+      <div class="chart" id="chartHeat"></div>
+      <div class="legend" style="margin:8px 0 0">
+        <span>Less</span>
+        <span><span class="sw" style="background:var(--bar)"></span>0</span>
+        <span><span class="sw" style="background:var(--seq1)"></span>1–4</span>
+        <span><span class="sw" style="background:var(--seq2)"></span>5–9</span>
+        <span><span class="sw" style="background:var(--seq3)"></span>10–19</span>
+        <span><span class="sw" style="background:var(--seq4)"></span>20+ pts</span>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>Field funnel</h2>
+      <div class="chart" id="chartFunnel"></div>
+    </div>
+    <div class="panel">
+      <h2>LeetCode problems solved</h2>
+      <div class="chart" id="chartLeetcode"><p class="muted empty">Log your first problem on the Prep tab to start this line.</p></div>
+    </div>
+  </section>
+
   <div class="panel">
     <h2>Data</h2>
     <p class="muted">Saved in this browser only. Export now and then as a backup.</p>
@@ -153,221 +267,8 @@
   <button id="restartBtn" type="button">Restart now</button>
 </div>
 
-<script>
-const ACTIONS = [
-  { key: "walkIn",   label: "Walked in",        pts: 3 },
-  { key: "owner",    label: "Talked with owner", pts: 5 },
-  { key: "problem",  label: "Problem quote",    pts: 5 },
-  { key: "followUp", label: "Follow-up booked", pts: 10 },
-  { key: "yes",      label: "Founding yes",     pts: 25 },
-  { key: "live",     label: "System live",      pts: 25 },
-];
-const STORE_KEY = "sundin-scoreboard-v1";
-const L1_TARGET = 100, L2_TARGET = 3;
-
-function load() {
-  try {
-    const raw = localStorage.getItem(STORE_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch (e) {}
-  return { visits: [], experiments: {} };
-}
-function save() {
-  try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) {}
-}
-let state = load();
-
-// Weeks start on Monday, so a Saturday field block belongs to that week.
-function weekStart(dateStr) {
-  const d = new Date(dateStr + "T12:00:00");
-  const day = (d.getDay() + 6) % 7;
-  d.setDate(d.getDate() - day);
-  return d.toISOString().slice(0, 10);
-}
-function today() {
-  const d = new Date();
-  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
-  return d.toISOString().slice(0, 10);
-}
-function visitPoints(v) {
-  return ACTIONS.reduce((sum, a) => sum + (v.actions[a.key] ? a.pts : 0), 0);
-}
-function esc(s) {
-  return String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
-}
-
-// Consecutive weeks with at least one walk-in, counting back from this week.
-// The current week doesn't break the streak until it's over.
-function streak() {
-  const weeks = new Set(state.visits.filter(v => v.actions.walkIn).map(v => weekStart(v.date)));
-  const d = new Date(weekStart(today()) + "T12:00:00");
-  let count = 0;
-  if (!weeks.has(d.toISOString().slice(0, 10))) d.setDate(d.getDate() - 7);
-  while (weeks.has(d.toISOString().slice(0, 10))) {
-    count++;
-    d.setDate(d.getDate() - 7);
-  }
-  return { count, thisWeek: weeks.has(weekStart(today())) };
-}
-
-function render() {
-  const total = state.visits.reduce((s, v) => s + visitPoints(v), 0);
-  const thisWeek = weekStart(today());
-  const weekPts = state.visits.filter(v => weekStart(v.date) === thisWeek).reduce((s, v) => s + visitPoints(v), 0);
-  const liveShops = new Set(state.visits.filter(v => v.actions.live).map(v => v.shop.trim().toLowerCase())).size;
-
-  document.getElementById("total").textContent = total;
-  document.getElementById("weekPts").textContent = `${weekPts} this week`;
-
-  const l1 = document.getElementById("l1");
-  l1.innerHTML = total >= L1_TARGET
-    ? `<span class="unlocked">Unlocked</span>`
-    : `${total} <small>/ ${L1_TARGET} pts</small>`;
-  document.getElementById("l1bar").style.width = Math.min(100, total / L1_TARGET * 100) + "%";
-
-  const l2 = document.getElementById("l2");
-  l2.innerHTML = liveShops >= L2_TARGET
-    ? `<span class="unlocked">Unlocked</span>`
-    : `${liveShops} <small>/ ${L2_TARGET} shops live</small>`;
-  document.getElementById("l2bar").style.width = Math.min(100, liveShops / L2_TARGET * 100) + "%";
-
-  const s = streak();
-  document.getElementById("streak").innerHTML = `${s.count} <small>week${s.count === 1 ? "" : "s"}</small>`;
-  document.getElementById("streakNote").textContent = s.thisWeek ? "This week's field block is done." : "No field block yet this week.";
-
-  const visits = [...state.visits].sort((a, b) => b.date.localeCompare(a.date));
-  document.getElementById("visitTable").innerHTML = visits.length
-    ? `<tr><th>Date</th><th>Shop</th><th>Area</th><th>Done</th><th class="num">Pts</th><th></th></tr>` +
-      visits.map(v => `<tr>
-        <td>${esc(v.date)}</td><td>${esc(v.shop)}</td><td>${esc(v.area)}</td>
-        <td>${ACTIONS.filter(a => v.actions[a.key]).map(a => a.label).join(", ")}${v.notes ? `<div class="muted">${esc(v.notes)}</div>` : ""}</td>
-        <td class="num">${visitPoints(v)}</td>
-        <td><button class="link" data-del="${v.id}" title="Delete">✕</button></td></tr>`).join("")
-    : `<tr><td class="muted">No visits yet. Your first walk-in is worth 3 points.</td></tr>`;
-
-  const quotes = visits.filter(v => v.quote);
-  document.getElementById("quotes").innerHTML = quotes.length
-    ? quotes.map(v => `<blockquote>${esc(v.quote)}<cite>${esc(v.shop)}, ${esc(v.date)}</cite></blockquote>`).join("")
-    : `<p class="muted">Quotes you log show up here. They become your sales page, in owners' own words.</p>`;
-
-  document.getElementById("eWeek").textContent = thisWeek;
-  const cur = state.experiments[thisWeek] || {};
-  document.getElementById("eVar").value = cur.variable || "";
-  document.getElementById("eHyp").value = cur.hypothesis || "";
-  document.getElementById("eResult").value = cur.result || "";
-  const exps = Object.entries(state.experiments).sort((a, b) => b[0].localeCompare(a[0]));
-  document.getElementById("expTable").innerHTML = exps.length
-    ? `<tr><th>Week of</th><th>Variable</th><th>Hypothesis</th><th>Result</th></tr>` +
-      exps.map(([w, e]) => `<tr><td>${esc(w)}</td><td>${esc(e.variable)}</td><td>${esc(e.hypothesis)}</td><td>${esc(e.result)}</td></tr>`).join("")
-    : "";
-}
-
-document.getElementById("actionChecks").innerHTML = ACTIONS.map(a =>
-  `<label><input type="checkbox" name="${a.key}" ${a.key === "walkIn" ? "checked" : ""}> ${a.label} <span class="muted">+${a.pts}</span></label>`
-).join("");
-document.getElementById("vDate").value = today();
-
-document.getElementById("visitForm").addEventListener("submit", e => {
-  e.preventDefault();
-  const actions = {};
-  ACTIONS.forEach(a => { actions[a.key] = document.querySelector(`input[name=${a.key}]`).checked; });
-  const quote = document.getElementById("vQuote").value.trim();
-  if (quote) actions.problem = true;
-  state.visits.push({
-    id: Date.now().toString(36),
-    date: document.getElementById("vDate").value,
-    shop: document.getElementById("vShop").value.trim(),
-    area: document.getElementById("vArea").value.trim(),
-    actions, quote,
-    notes: document.getElementById("vNotes").value.trim(),
-  });
-  save();
-  e.target.reset();
-  document.getElementById("vDate").value = today();
-  document.querySelector("input[name=walkIn]").checked = true;
-  render();
-});
-
-document.getElementById("visitTable").addEventListener("click", e => {
-  const id = e.target.dataset.del;
-  if (!id) return;
-  state.visits = state.visits.filter(v => v.id !== id);
-  save();
-  render();
-});
-
-document.getElementById("expForm").addEventListener("submit", e => {
-  e.preventDefault();
-  state.experiments[weekStart(today())] = {
-    variable: document.getElementById("eVar").value.trim(),
-    hypothesis: document.getElementById("eHyp").value.trim(),
-    result: document.getElementById("eResult").value.trim(),
-  };
-  save();
-  render();
-});
-
-document.getElementById("exportBtn").addEventListener("click", () => {
-  const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = `sundin-scoreboard-${today()}.json`;
-  a.click();
-  URL.revokeObjectURL(a.href);
-});
-document.getElementById("importBtn").addEventListener("click", () => document.getElementById("importFile").click());
-document.getElementById("importFile").addEventListener("change", async e => {
-  const file = e.target.files[0];
-  if (!file) return;
-  try {
-    const data = JSON.parse(await file.text());
-    if (Array.isArray(data.visits)) {
-      state = { visits: data.visits, experiments: data.experiments || {} };
-      save();
-      render();
-    }
-  } catch (err) {
-    console.error("Import failed", err);
-  }
-  e.target.value = "";
-});
-
-render();
-
-// Installed-app support: offline cache plus "Restart now" when a new deploy lands.
-if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
-  let restartRequested = false;
-  const banner = document.getElementById("updateBanner");
-  const showUpdate = worker => {
-    banner.hidden = false;
-    document.getElementById("restartBtn").onclick = () => {
-      restartRequested = true;
-      worker.postMessage("SKIP_WAITING");
-    };
-  };
-
-  navigator.serviceWorker.addEventListener("controllerchange", () => {
-    if (restartRequested) location.reload();
-  });
-
-  navigator.serviceWorker.register("sw.js").then(reg => {
-    if (reg.waiting && navigator.serviceWorker.controller) showUpdate(reg.waiting);
-    reg.addEventListener("updatefound", () => {
-      const worker = reg.installing;
-      worker.addEventListener("statechange", () => {
-        if (worker.state === "installed" && navigator.serviceWorker.controller) showUpdate(worker);
-      });
-    });
-    // iPhone home-screen apps resume rather than relaunch, so check on every return too.
-    const check = () => reg.update().catch(() => {});
-    setInterval(check, 5 * 60 * 1000);
-    document.addEventListener("visibilitychange", () => {
-      if (document.visibilityState === "visible") check();
-    });
-  }).catch(err => console.error("Service worker registration failed", err));
-
-  if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
-}
-</script>
+<script src="vendor/d3.min.js"></script>
+<script src="charts.js"></script>
+<script src="app.js"></script>
 </body>
 </html>

@@ -19,7 +19,8 @@ for (const file of STAMPED) {
   const text = readFileSync(join(root, file), "utf8").replaceAll("__APP_VERSION__", version);
   writeFileSync(join(out, file), text);
 }
-cpSync(join(root, "icons"), join(out, "icons"), { recursive: true });
+for (const file of ["app.js", "charts.js"]) cpSync(join(root, file), join(out, file));
+for (const dir of ["icons", "vendor"]) cpSync(join(root, dir), join(out, dir), { recursive: true });
 writeFileSync(join(out, "version.json"), JSON.stringify({ version }) + "\n");
 
 console.log(`Built ${version} into ${out}`);

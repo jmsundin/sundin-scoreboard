@@ -25,6 +25,18 @@ Shop visits are field research, not selling. You score points for what you learn
 - Do the HighLevel setup only after a shop says yes.
 - Report your score every week. A Saturday check-in arrives in the Claude project thread.
 
+## The weekly quest
+One small, fixed quest covers both tracks, in any order: 3 shops walked into, 5 LeetCode problems,
+1 system design session, 1 behavioral story. Switch between them whenever one gets boring.
+
+- **Field tab:** shop visits, experiments and quotes (Sundin Systems).
+- **Prep tab:** log a new LeetCode problem (+3); it returns for review after 3, 10 and 30 days (+2 each).
+  System design topics (+5 per session) and behavioral stories (+3 per practice) are one-tap.
+- **Progress tab:** D3 charts. Points per week by track (tap a week to list its entries), active days,
+  the field funnel, and LeetCode problems solved over time.
+
+Level 1 and Level 2 still count field points only, so the AI-agent reward stays tied to shop visits.
+
 ## Data
 Your data is saved in the browser's local storage for this file. Use **Export JSON** now and then as a backup,
 and **Import JSON** to restore it or move it to another browser.

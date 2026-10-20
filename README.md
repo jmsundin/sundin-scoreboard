@@ -37,6 +37,21 @@ One small, fixed quest covers both tracks, in any order: 3 shops walked into, 5 
 
 Level 1 and Level 2 still count field points only, so the AI-agent reward stays tied to shop visits.
 
+## Sync between devices
+Every device keeps a full local copy, so the app works with no signal. When a device is connected
+with the sync key, it merges its copy with the server's whenever you log something, open the app,
+or come back online. Merging matches records by id and keeps the newer edit. Deletions spread to
+other devices, and a device's existing scores are added, never overwritten.
+
+One-time setup in Vercel (project **sundin-scoreboard**):
+1. **Storage** tab, then **Create Database**, then **Upstash for Redis** (the free plan is plenty), connected to this project.
+   That adds `KV_REST_API_URL` and `KV_REST_API_TOKEN`.
+2. **Settings**, then **Environment Variables**: add `SYNC_TOKEN` with a long random value
+   (for example, the output of `openssl rand -base64 24`). This is your sync key.
+3. Redeploy, then on each device open the Data panel and enter the sync key.
+
+The API is `api/sync.js`; the merge rules live in `sync-merge.js` and are shared with the browser.
+
 ## Data
 Your data is saved in the browser's local storage for this file. Use **Export JSON** now and then as a backup,
 and **Import JSON** to restore it or move it to another browser.

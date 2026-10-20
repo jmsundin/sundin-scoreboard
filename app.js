@@ -75,10 +75,21 @@ function normalize(data) {
     experiments: data.experiments || {},
     prep: Array.isArray(data.prep) ? data.prep : [],
     problems: Array.isArray(data.problems) ? data.problems : [],
+    deleted: data.deleted && typeof data.deleted === "object" ? data.deleted : {},
   };
 }
-function save() {
+function persist() {
   try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) {}
+}
+function save() {
+  persist();
+  scheduleSync();
+}
+// Every write stamps updatedAt so sync knows which copy of a record is newer.
+const stamp = record => ({ ...record, updatedAt: Date.now() });
+function remove(list, id) {
+  state[list] = state[list].filter(r => r.id !== id);
+  state.deleted[id] = Date.now();
 }
 let state = load();
 
@@ -266,7 +277,7 @@ function renderPrep() {
 }
 
 function logPrep(kind, label, extra = {}) {
-  state.prep.push({ id: uid(), date: today(), kind, label, ...extra });
+  state.prep.push(stamp({ id: uid(), date: today(), kind, label, ...extra }));
 }
 
 // Tabs
@@ -292,14 +303,14 @@ document.getElementById("visitForm").addEventListener("submit", e => {
   ACTIONS.forEach(a => { actions[a.key] = document.querySelector(`input[name=${a.key}]`).checked; });
   const quote = document.getElementById("vQuote").value.trim();
   if (quote) actions.problem = true;
-  state.visits.push({
+  state.visits.push(stamp({
     id: uid(),
     date: document.getElementById("vDate").value,
     shop: document.getElementById("vShop").value.trim(),
     area: document.getElementById("vArea").value.trim(),
     actions, quote,
     notes: document.getElementById("vNotes").value.trim(),
-  });
+  }));
   save();
   e.target.reset();
   document.getElementById("vDate").value = today();
@@ -309,11 +320,11 @@ document.getElementById("visitForm").addEventListener("submit", e => {
 
 document.getElementById("expForm").addEventListener("submit", e => {
   e.preventDefault();
-  state.experiments[weekStart(today())] = {
+  state.experiments[weekStart(today())] = stamp({
     variable: document.getElementById("eVar").value.trim(),
     hypothesis: document.getElementById("eHyp").value.trim(),
     result: document.getElementById("eResult").value.trim(),
-  };
+  });
   save();
   render();
 });
@@ -324,7 +335,7 @@ document.getElementById("lcForm").addEventListener("submit", e => {
   const name = document.getElementById("lcName").value.trim();
   const url = document.getElementById("lcUrl").value.trim();
   const difficulty = document.getElementById("lcDiff").value;
-  const problem = { id: uid(), name, url, difficulty, firstDate: today(), stage: 0, nextDue: addDays(today(), REVIEW_GAPS[0]) };
+  const problem = stamp({ id: uid(), name, url, difficulty, firstDate: today(), stage: 0, nextDue: addDays(today(), REVIEW_GAPS[0]) });
   state.problems.push(problem);
   logPrep("lcNew", name, { problemId: problem.id, difficulty });
   save();
@@ -337,15 +348,16 @@ document.body.addEventListener("click", e => {
   if (!t) return;
   const d = t.dataset;
   if (d.delVisit) {
-    state.visits = state.visits.filter(v => v.id !== d.delVisit);
+    remove("visits", d.delVisit);
   } else if (d.delPrep) {
-    state.prep = state.prep.filter(p => p.id !== d.delPrep);
+    remove("prep", d.delPrep);
   } else if (d.review) {
     const p = state.problems.find(x => x.id === d.review);
     if (!p) return;
     logPrep("lcReview", p.name, { problemId: p.id });
     p.stage += 1;
     p.nextDue = p.stage < REVIEW_GAPS.length ? addDays(today(), REVIEW_GAPS[p.stage]) : null;
+    p.updatedAt = Date.now();
   } else if (d.design) {
     logPrep("design", d.design);
   } else if (d.story) {
@@ -373,7 +385,8 @@ document.getElementById("importFile").addEventListener("change", async e => {
   try {
     const data = JSON.parse(await file.text());
     if (Array.isArray(data.visits)) {
-      state = normalize(data);
+      // Importing merges rather than replaces, so it can't wipe newer records.
+      state = normalize(SyncMerge.merge(state, data));
       save();
       render();
     }
@@ -391,6 +404,102 @@ let savedTab = "field";
 try { savedTab = sessionStorage.getItem("sundin-tab") || "field"; } catch (e) {}
 render();
 showTab(savedTab);
+
+// Cross-device sync. Each device keeps a full local copy (so the app works offline)
+// and merges it with the server copy whenever it changes, opens or comes back online.
+const SYNC_KEY_STORE = "sundin-sync-key";
+let syncKey = "";
+try { syncKey = localStorage.getItem(SYNC_KEY_STORE) || ""; } catch (e) {}
+let syncTimer = null, syncing = false, syncAgain = false, lastSyncedAt = null, syncError = "";
+const canSync = () => !!syncKey && location.protocol.startsWith("http");
+
+function scheduleSync(delay = 1500) {
+  if (!canSync()) return;
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(syncNow, delay);
+}
+
+async function syncNow() {
+  if (!canSync()) return;
+  if (syncing) { syncAgain = true; return; }
+  syncing = true;
+  renderSync();
+  try {
+    const r = await fetch("api/sync", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${syncKey}` },
+      body: JSON.stringify({ state }),
+    });
+    const body = await r.json().catch(() => ({}));
+    if (r.status === 401) {
+      syncKey = "";
+      try { localStorage.removeItem(SYNC_KEY_STORE); } catch (e) {}
+    }
+    if (!r.ok) throw new Error(body.error || `Sync failed (${r.status}).`);
+    // Merge again locally so anything logged while the request was in flight survives.
+    const merged = normalize(SyncMerge.merge(state, body.state));
+    if (JSON.stringify(merged) !== JSON.stringify(state)) {
+      state = merged;
+      persist();
+      render();
+    }
+    lastSyncedAt = Date.now();
+    syncError = "";
+  } catch (err) {
+    syncError = navigator.onLine === false
+      ? "Offline. Your scores are saved here and will sync when you're back online."
+      : err.message;
+  } finally {
+    syncing = false;
+    renderSync();
+    if (syncAgain) { syncAgain = false; scheduleSync(0); }
+  }
+}
+
+function renderSync() {
+  const status = document.getElementById("syncStatus");
+  document.getElementById("syncForm").hidden = !!syncKey;
+  document.getElementById("syncDisconnect").hidden = !syncKey;
+  if (!syncKey) {
+    status.textContent = syncError || "Not connected. Enter your sync key to share scores between your devices.";
+  } else if (syncing) {
+    status.textContent = "Syncing…";
+  } else if (syncError) {
+    status.textContent = syncError;
+  } else if (lastSyncedAt) {
+    const mins = Math.round((Date.now() - lastSyncedAt) / 60000);
+    status.textContent = mins < 1 ? "Synced just now." : `Synced ${mins} min ago.`;
+  } else {
+    status.textContent = "Connected.";
+  }
+}
+
+document.getElementById("syncForm").addEventListener("submit", e => {
+  e.preventDefault();
+  const key = document.getElementById("syncKeyInput").value.trim();
+  if (!key) return;
+  syncKey = key;
+  syncError = "";
+  try { localStorage.setItem(SYNC_KEY_STORE, key); } catch (e) {}
+  e.target.reset();
+  syncNow();
+});
+document.getElementById("syncDisconnect").addEventListener("click", () => {
+  syncKey = "";
+  lastSyncedAt = null;
+  syncError = "";
+  try { localStorage.removeItem(SYNC_KEY_STORE); } catch (e) {}
+  renderSync();
+});
+window.addEventListener("online", () => syncNow());
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") syncNow();
+});
+setInterval(() => {
+  if (document.visibilityState === "visible") syncNow();
+}, 60 * 1000);
+renderSync();
+syncNow();
 
 // Installed-app support: offline cache plus "Restart now" when a new deploy lands.
 if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {

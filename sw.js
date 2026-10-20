@@ -9,6 +9,7 @@ const SHELL = [
   "manifest.webmanifest",
   "app.js",
   "charts.js",
+  "sync-merge.js",
   "vendor/d3.min.js",
   "icons/apple-touch-icon.png",
   "icons/icon-192.png",

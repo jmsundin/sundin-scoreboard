@@ -252,10 +252,16 @@
 
   <div class="panel">
     <h2>Data</h2>
-    <p class="muted">Saved in this browser only. Export now and then as a backup.</p>
+    <p class="muted" id="syncStatus"></p>
+    <form id="syncForm" class="tools" style="margin-bottom:12px">
+      <input type="password" id="syncKeyInput" placeholder="Sync key" autocomplete="current-password" style="flex:1;min-width:160px">
+      <button class="primary" type="submit">Connect this device</button>
+    </form>
+    <p class="muted" style="margin-top:0">Every device keeps its own copy, so the app works without signal. Export is a manual backup.</p>
     <div class="tools">
       <button id="exportBtn">Export JSON</button>
       <button id="importBtn">Import JSON</button>
+      <button id="syncDisconnect" type="button" hidden>Disconnect this device</button>
       <input type="file" id="importFile" accept="application/json" hidden>
     </div>
   </div>
@@ -269,6 +275,7 @@
 
 <script src="vendor/d3.min.js"></script>
 <script src="charts.js"></script>
+<script src="sync-merge.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

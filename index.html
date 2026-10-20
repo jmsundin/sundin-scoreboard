@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Scoreboard">
+<meta name="theme-color" content="#1f6feb">
+<title>Sundin Scoreboard</title>
+<style>
+  :root {
+    --bg: #f6f5f1; --panel: #ffffff; --text: #1d1d1b; --muted: #6b6a65;
+    --line: #e2e0d8; --accent: #1f6feb; --good: #1a7f37; --warn: #b35900;
+    --bar: #e9e7df;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #151514; --panel: #1f1f1d; --text: #ecebe6; --muted: #9b9a94;
+      --line: #33322f; --accent: #4c8dff; --good: #3fb950; --warn: #e3a04f; --bar: #2b2a27; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  main { max-width: 960px; margin: 0 auto; padding: 24px 16px 64px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  h2 { font-size: 15px; margin: 0 0 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+  .sub { color: var(--muted); margin: 0 0 20px; }
+  .grid { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+  .stat { font-size: 32px; font-weight: 650; font-variant-numeric: tabular-nums; }
+  .stat small { font-size: 14px; color: var(--muted); font-weight: 400; }
+  .bar { height: 8px; background: var(--bar); border-radius: 4px; overflow: hidden; margin-top: 8px; }
+  .bar > div { height: 100%; background: var(--accent); }
+  .unlocked { color: var(--good); font-weight: 600; }
+  label { display: block; font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+  input[type=text], input[type=date], textarea {
+    width: 100%; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px;
+    background: var(--bg); color: var(--text); font: inherit; font-size: 16px; }
+  textarea { min-height: 60px; resize: vertical; }
+  .row { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); margin-bottom: 12px; }
+  .checks { display: flex; flex-wrap: wrap; gap: 8px 16px; margin: 4px 0 12px; }
+  .checks label { display: flex; align-items: center; gap: 6px; color: var(--text); font-size: 15px; margin: 0; padding: 6px 0; }
+  .checks input { width: 20px; height: 20px; }
+  button { font: inherit; padding: 8px 14px; border-radius: 6px; border: 1px solid var(--line);
+    background: var(--panel); color: var(--text); cursor: pointer; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.link { border: 0; background: none; color: var(--muted); padding: 2px 6px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 500; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .table-wrap { overflow-x: auto; }
+  blockquote { margin: 0 0 10px; padding: 8px 12px; border-left: 3px solid var(--accent); background: var(--bg); }
+  blockquote cite { display: block; font-size: 12px; color: var(--muted); font-style: normal; margin-top: 4px; }
+  .muted { color: var(--muted); }
+  .tools { display: flex; gap: 8px; flex-wrap: wrap; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Sundin Systems Scoreboard</h1>
+  <p class="sub">Field research, not selling. You score for what you learn. A "no" still counts.</p>
+
+  <div class="grid">
+    <div class="panel">
+      <h2>Points</h2>
+      <div class="stat" id="total">0</div>
+      <div class="muted" id="weekPts"></div>
+    </div>
+    <div class="panel">
+      <h2>Level 1: build the AI agent</h2>
+      <div class="stat" id="l1">0 <small>/ 100 pts</small></div>
+      <div class="bar"><div id="l1bar" style="width:0"></div></div>
+    </div>
+    <div class="panel">
+      <h2>Level 2: evals on real calls</h2>
+      <div class="stat" id="l2">0 <small>/ 3 shops live</small></div>
+      <div class="bar"><div id="l2bar" style="width:0"></div></div>
+    </div>
+    <div class="panel">
+      <h2>Weekly streak</h2>
+      <div class="stat" id="streak">0 <small>weeks</small></div>
+      <div class="muted" id="streakNote"></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Log a shop visit</h2>
+    <form id="visitForm">
+      <div class="row">
+        <div><label for="vDate">Date</label><input type="date" id="vDate" required></div>
+        <div><label for="vShop">Shop</label><input type="text" id="vShop" placeholder="Shop name" required></div>
+        <div><label for="vArea">Neighborhood</label><input type="text" id="vArea" placeholder="e.g. Clarendon"></div>
+      </div>
+      <div class="checks" id="actionChecks"></div>
+      <div class="row">
+        <div><label for="vQuote">Owner's problem, in their words</label><textarea id="vQuote" placeholder="&quot;We miss calls all morning when we're under a car.&quot;"></textarea></div>
+        <div><label for="vNotes">Notes</label><textarea id="vNotes" placeholder="What surprised you?"></textarea></div>
+      </div>
+      <button class="primary" type="submit">Add visit</button>
+    </form>
+  </div>
+
+  <div class="panel">
+    <h2>This week's experiment</h2>
+    <form id="expForm">
+      <div class="row">
+        <div><label for="eVar">One variable I'm changing</label><input type="text" id="eVar" placeholder="e.g. new opening line"></div>
+        <div><label for="eHyp">Hypothesis</label><input type="text" id="eHyp" placeholder="e.g. shops lose 5+ calls a day to voicemail"></div>
+        <div><label for="eResult">What happened</label><input type="text" id="eResult" placeholder="Fill in after the field block"></div>
+      </div>
+      <button type="submit">Save for week of <span id="eWeek"></span></button>
+    </form>
+    <div class="table-wrap" style="margin-top:12px"><table id="expTable"></table></div>
+  </div>
+
+  <div class="panel">
+    <h2>Visits</h2>
+    <div class="table-wrap"><table id="visitTable"></table></div>
+  </div>
+
+  <div class="panel">
+    <h2>Quotes</h2>
+    <div id="quotes"></div>
+  </div>
+
+  <div class="panel">
+    <h2>Data</h2>
+    <p class="muted">Saved in this browser only. Export now and then as a backup.</p>
+    <div class="tools">
+      <button id="exportBtn">Export JSON</button>
+      <button id="importBtn">Import JSON</button>
+      <input type="file" id="importFile" accept="application/json" hidden>
+    </div>
+  </div>
+</main>
+
+<script>
+const ACTIONS = [
+  { key: "walkIn",   label: "Walked in",        pts: 3 },
+  { key: "owner",    label: "Talked with owner", pts: 5 },
+  { key: "problem",  label: "Problem quote",    pts: 5 },
+  { key: "followUp", label: "Follow-up booked", pts: 10 },
+  { key: "yes",      label: "Founding yes",     pts: 25 },
+  { key: "live",     label: "System live",      pts: 25 },
+];
+const STORE_KEY = "sundin-scoreboard-v1";
+const L1_TARGET = 100, L2_TARGET = 3;
+
+function load() {
+  try {
+    const raw = localStorage.getItem(STORE_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (e) {}
+  return { visits: [], experiments: {} };
+}
+function save() {
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(state)); } catch (e) {}
+}
+let state = load();
+
+// Weeks start on Monday, so a Saturday field block belongs to that week.
+function weekStart(dateStr) {
+  const d = new Date(dateStr + "T12:00:00");
+  const day = (d.getDay() + 6) % 7;
+  d.setDate(d.getDate() - day);
+  return d.toISOString().slice(0, 10);
+}
+function today() {
+  const d = new Date();
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  return d.toISOString().slice(0, 10);
+}
+function visitPoints(v) {
+  return ACTIONS.reduce((sum, a) => sum + (v.actions[a.key] ? a.pts : 0), 0);
+}
+function esc(s) {
+  return String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+}
+
+// Consecutive weeks with at least one walk-in, counting back from this week.
+// The current week doesn't break the streak until it's over.
+function streak() {
+  const weeks = new Set(state.visits.filter(v => v.actions.walkIn).map(v => weekStart(v.date)));
+  const d = new Date(weekStart(today()) + "T12:00:00");
+  let count = 0;
+  if (!weeks.has(d.toISOString().slice(0, 10))) d.setDate(d.getDate() - 7);
+  while (weeks.has(d.toISOString().slice(0, 10))) {
+    count++;
+    d.setDate(d.getDate() - 7);
+  }
+  return { count, thisWeek: weeks.has(weekStart(today())) };
+}
+
+function render() {
+  const total = state.visits.reduce((s, v) => s + visitPoints(v), 0);
+  const thisWeek = weekStart(today());
+  const weekPts = state.visits.filter(v => weekStart(v.date) === thisWeek).reduce((s, v) => s + visitPoints(v), 0);
+  const liveShops = new Set(state.visits.filter(v => v.actions.live).map(v => v.shop.trim().toLowerCase())).size;
+
+  document.getElementById("total").textContent = total;
+  document.getElementById("weekPts").textContent = `${weekPts} this week`;
+
+  const l1 = document.getElementById("l1");
+  l1.innerHTML = total >= L1_TARGET
+    ? `<span class="unlocked">Unlocked</span>`
+    : `${total} <small>/ ${L1_TARGET} pts</small>`;
+  document.getElementById("l1bar").style.width = Math.min(100, total / L1_TARGET * 100) + "%";
+
+  const l2 = document.getElementById("l2");
+  l2.innerHTML = liveShops >= L2_TARGET
+    ? `<span class="unlocked">Unlocked</span>`
+    : `${liveShops} <small>/ ${L2_TARGET} shops live</small>`;
+  document.getElementById("l2bar").style.width = Math.min(100, liveShops / L2_TARGET * 100) + "%";
+
+  const s = streak();
+  document.getElementById("streak").innerHTML = `${s.count} <small>week${s.count === 1 ? "" : "s"}</small>`;
+  document.getElementById("streakNote").textContent = s.thisWeek ? "This week's field block is done." : "No field block yet this week.";
+
+  const visits = [...state.visits].sort((a, b) => b.date.localeCompare(a.date));
+  document.getElementById("visitTable").innerHTML = visits.length
+    ? `<tr><th>Date</th><th>Shop</th><th>Area</th><th>Done</th><th class="num">Pts</th><th></th></tr>` +
+      visits.map(v => `<tr>
+        <td>${esc(v.date)}</td><td>${esc(v.shop)}</td><td>${esc(v.area)}</td>
+        <td>${ACTIONS.filter(a => v.actions[a.key]).map(a => a.label).join(", ")}${v.notes ? `<div class="muted">${esc(v.notes)}</div>` : ""}</td>
+        <td class="num">${visitPoints(v)}</td>
+        <td><button class="link" data-del="${v.id}" title="Delete">✕</button></td></tr>`).join("")
+    : `<tr><td class="muted">No visits yet. Your first walk-in is worth 3 points.</td></tr>`;
+
+  const quotes = visits.filter(v => v.quote);
+  document.getElementById("quotes").innerHTML = quotes.length
+    ? quotes.map(v => `<blockquote>${esc(v.quote)}<cite>${esc(v.shop)}, ${esc(v.date)}</cite></blockquote>`).join("")
+    : `<p class="muted">Quotes you log show up here. They become your sales page, in owners' own words.</p>`;
+
+  document.getElementById("eWeek").textContent = thisWeek;
+  const cur = state.experiments[thisWeek] || {};
+  document.getElementById("eVar").value = cur.variable || "";
+  document.getElementById("eHyp").value = cur.hypothesis || "";
+  document.getElementById("eResult").value = cur.result || "";
+  const exps = Object.entries(state.experiments).sort((a, b) => b[0].localeCompare(a[0]));
+  document.getElementById("expTable").innerHTML = exps.length
+    ? `<tr><th>Week of</th><th>Variable</th><th>Hypothesis</th><th>Result</th></tr>` +
+      exps.map(([w, e]) => `<tr><td>${esc(w)}</td><td>${esc(e.variable)}</td><td>${esc(e.hypothesis)}</td><td>${esc(e.result)}</td></tr>`).join("")
+    : "";
+}
+
+document.getElementById("actionChecks").innerHTML = ACTIONS.map(a =>
+  `<label><input type="checkbox" name="${a.key}" ${a.key === "walkIn" ? "checked" : ""}> ${a.label} <span class="muted">+${a.pts}</span></label>`
+).join("");
+document.getElementById("vDate").value = today();
+
+document.getElementById("visitForm").addEventListener("submit", e => {
+  e.preventDefault();
+  const actions = {};
+  ACTIONS.forEach(a => { actions[a.key] = document.querySelector(`input[name=${a.key}]`).checked; });
+  const quote = document.getElementById("vQuote").value.trim();
+  if (quote) actions.problem = true;
+  state.visits.push({
+    id: Date.now().toString(36),
+    date: document.getElementById("vDate").value,
+    shop: document.getElementById("vShop").value.trim(),
+    area: document.getElementById("vArea").value.trim(),
+    actions, quote,
+    notes: document.getElementById("vNotes").value.trim(),
+  });
+  save();
+  e.target.reset();
+  document.getElementById("vDate").value = today();
+  document.querySelector("input[name=walkIn]").checked = true;
+  render();
+});
+
+document.getElementById("visitTable").addEventListener("click", e => {
+  const id = e.target.dataset.del;
+  if (!id) return;
+  state.visits = state.visits.filter(v => v.id !== id);
+  save();
+  render();
+});
+
+document.getElementById("expForm").addEventListener("submit", e => {
+  e.preventDefault();
+  state.experiments[weekStart(today())] = {
+    variable: document.getElementById("eVar").value.trim(),
+    hypothesis: document.getElementById("eHyp").value.trim(),
+    result: document.getElementById("eResult").value.trim(),
+  };
+  save();
+  render();
+});
+
+document.getElementById("exportBtn").addEventListener("click", () => {
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = `sundin-scoreboard-${today()}.json`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+document.getElementById("importBtn").addEventListener("click", () => document.getElementById("importFile").click());
+document.getElementById("importFile").addEventListener("change", async e => {
+  const file = e.target.files[0];
+  if (!file) return;
+  try {
+    const data = JSON.parse(await file.text());
+    if (Array.isArray(data.visits)) {
+      state = { visits: data.visits, experiments: data.experiments || {} };
+      save();
+      render();
+    }
+  } catch (err) {
+    console.error("Import failed", err);
+  }
+  e.target.value = "";
+});
+
+render();
+</script>
+</body>
+</html>
